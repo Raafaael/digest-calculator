@@ -1,7 +1,11 @@
-import java.io.ByteArrayOutputStream;
+/*
+ * Aluno 1: Rafael Soares Estevão
+ * Matrícula 1: 2320470
+ * Aluno 2: Dante Honorato Navaza
+ * Matrícula 2: 2321406
+ */
+
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -20,7 +24,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-/** Testes de integracao autocontidos, sem dependencia de JUnit. */
+// Testes do programa, sem usar JUnit.
 public final class DigestCalculatorTest {
     private static int passed;
     private static int failed;
@@ -29,60 +33,34 @@ public final class DigestCalculatorTest {
     }
 
     public static void main(String[] args) throws Exception {
-        execute("fluxo completo e persistencia", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testCompleteWorkflowAndPersistence();
-            }
-        });
-        execute("quatro algoritmos e arquivo vazio", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testAllAlgorithmsAndEmptyFile();
-            }
-        });
-        execute("arquivo binario maior que o buffer", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testLargeBinaryFile();
-            }
-        });
-        execute("validacao dos argumentos e caminhos", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testArgumentAndPathValidation();
-            }
-        });
-        execute("lista vazia equivale a catalogo sem entradas", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testEmptyCatalogFiles();
-            }
-        });
-        execute("entradas problematicas geram aviso sem abortar", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testLenientCatalogEntries();
-            }
-        });
-        execute("formatacao do XML regravado", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testSavedXmlFormatting();
-            }
-        });
-        execute("validacao estrutural e seguranca do XML", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testXmlValidationAndXxeRejection();
-            }
-        });
-        execute("main em processo Java separado", new CheckedTest() {
-            @Override
-            public void run() throws Exception {
-                testMainInSeparateProcess();
-            }
-        });
+        execute("fluxo completo e persistencia",
+                DigestCalculatorTest::testCompleteWorkflowAndPersistence);
+        execute("quatro algoritmos e arquivo vazio",
+                DigestCalculatorTest::testAllAlgorithmsAndEmptyFile);
+        execute("arquivo binario maior que o buffer",
+                DigestCalculatorTest::testLargeBinaryFile);
+        execute("validacao dos argumentos e caminhos",
+                DigestCalculatorTest::testArgumentAndPathValidation);
+        execute("lista vazia equivale a catalogo sem entradas",
+                DigestCalculatorTest::testEmptyCatalogFiles);
+        execute("avisos de hexadecimal e rejeicao de algoritmo invalido",
+                DigestCalculatorTest::testCatalogValidationAndHexWarnings);
+        execute("estrutura e valores do XML regravado",
+                DigestCalculatorTest::testSavedXmlFormatting);
+        execute("validacao estrutural do XML",
+                DigestCalculatorTest::testXmlValidation);
+        execute("main em processo Java separado",
+                DigestCalculatorTest::testMainInSeparateProcess);
+        execute("vetores conhecidos e exemplo da aula",
+                DigestCalculatorTest::testKnownVectorsAndClassExample);
+        execute("quatro digests no mesmo registro",
+                DigestCalculatorTest::testAllDigestsInOneEntry);
+        execute("colisao tem prioridade sobre todos os outros status",
+                DigestCalculatorTest::testCollisionPrecedence);
+        execute("nomes com caracteres XML, acentos e espacos",
+                DigestCalculatorTest::testExactFileNames);
+        execute("listagem antes da tentativa de gravacao",
+                DigestCalculatorTest::testOutputBeforeCatalogUpdate);
 
         System.out.println();
         System.out.println("Resumo: " + passed + " teste(s) aprovado(s), "
@@ -93,19 +71,16 @@ public final class DigestCalculatorTest {
     }
 
     private static void testCompleteWorkflowAndPersistence() throws Exception {
-        Path root = Files.createTempDirectory("digest-calculator-core-");
-        try {
-            Path filesDirectory = Files.createDirectory(root.resolve("pasta com espacos"));
-            Path catalog = root.resolve("catalogo com espacos.xml");
+        try (TestFiles files = new TestFiles()) {
 
-            writeUtf8(filesDirectory.resolve("ok.txt"), "conteudo-ok");
-            writeUtf8(filesDirectory.resolve("not-ok.txt"), "conteudo-atualizado");
-            writeUtf8(filesDirectory.resolve("existing-no-sha256.txt"),
+            writeUtf8(files.folder.resolve("ok.txt"), "conteudo-ok");
+            writeUtf8(files.folder.resolve("not-ok.txt"), "conteudo-atualizado");
+            writeUtf8(files.folder.resolve("existing-no-sha256.txt"),
                     "conteudo-existente");
-            writeUtf8(filesDirectory.resolve("new.txt"), "conteudo-novo-unico");
-            Files.write(filesDirectory.resolve("dup-a.bin"), new byte[] {0, 1, 2, 3, 4});
-            Files.write(filesDirectory.resolve("dup-b.bin"), new byte[] {0, 1, 2, 3, 4});
-            writeUtf8(filesDirectory.resolve("catalog-collision.bin"),
+            writeUtf8(files.folder.resolve("new.txt"), "conteudo-novo-unico");
+            Files.write(files.folder.resolve("dup-a.bin"), new byte[] {0, 1, 2, 3, 4});
+            Files.write(files.folder.resolve("dup-b.bin"), new byte[] {0, 1, 2, 3, 4});
+            writeUtf8(files.folder.resolve("catalog-collision.bin"),
                     "conteudo-colisao-catalogo");
 
             String okDigest = digest("SHA-256", bytes("conteudo-ok"));
@@ -121,9 +96,9 @@ public final class DigestCalculatorTest {
                     + fileEntry("existing-no-sha256.txt", "MD5", existingMd5)
                     + fileEntry("absent-name.bin", "SHA256", catalogCollisionDigest)
                     + "</CATALOG>\n";
-            writeUtf8(catalog, xml);
+            writeUtf8(files.catalog, xml);
 
-            Invocation first = invoke("SHA256", catalog.toString(), filesDirectory.toString());
+            Invocation first = invoke("SHA256", files.catalog.toString(), files.folder.toString());
             assertEquals(0, first.exitCode, "codigo de saida da primeira execucao");
             assertEquals("", first.stderr, "stderr da primeira execucao");
 
@@ -142,7 +117,7 @@ public final class DigestCalculatorTest {
                     + line("ok.txt", "SHA256", okDigest, "OK");
             assertEquals(expectedFirst, first.stdout, "saida completa da primeira execucao");
 
-            Document updated = parse(catalog);
+            Document updated = parse(files.catalog);
             assertEquals(existingSha256,
                     findDigest(updated, "existing-no-sha256.txt", "SHA256"),
                     "digest acrescentado ao FILE_ENTRY existente");
@@ -157,24 +132,15 @@ public final class DigestCalculatorTest {
             assertEquals("new.txt", lastFileEntryName(updated),
                     "novo arquivo deve ser incluido no fim do catalogo");
 
-            byte[] beforeSecondRun = Files.readAllBytes(catalog);
-            Invocation second = invoke("SHA256", catalog.toString(), filesDirectory.toString());
+            byte[] beforeSecondRun = Files.readAllBytes(files.catalog);
+            Invocation second = invoke("SHA256", files.catalog.toString(), files.folder.toString());
             assertEquals(0, second.exitCode, "codigo de saida da segunda execucao");
             assertEquals("", second.stderr, "stderr da segunda execucao");
-            String expectedSecond = line("catalog-collision.bin", "SHA256",
-                    catalogCollisionDigest, "COLISION")
-                    + line("dup-a.bin", "SHA256", duplicateDigest, "COLISION")
-                    + line("dup-b.bin", "SHA256", duplicateDigest, "COLISION")
-                    + line("existing-no-sha256.txt", "SHA256", existingSha256, "OK")
-                    + line("new.txt", "SHA256", newSha256, "OK")
-                    + line("not-ok.txt", "SHA256", currentNotOkDigest, "NOT OK")
-                    + line("ok.txt", "SHA256", okDigest, "OK");
+            String expectedSecond = expectedFirst.replace("(NOT FOUND)", "(OK)");
             assertEquals(expectedSecond, second.stdout,
                     "NOT FOUND deve se tornar OK na segunda execucao");
-            assertTrue(Arrays.equals(beforeSecondRun, Files.readAllBytes(catalog)),
+            assertTrue(Arrays.equals(beforeSecondRun, Files.readAllBytes(files.catalog)),
                     "catalogo nao deve ser regravado quando nao houver NOT FOUND");
-        } finally {
-            deleteRecursively(root);
         }
     }
 
@@ -185,53 +151,43 @@ public final class DigestCalculatorTest {
             {"SHA256", "SHA-256"},
             {"SHA512", "SHA-512"}
         };
-        Path root = Files.createTempDirectory("digest-calculator-algorithms-");
-        try {
+        try (TestFiles files = new TestFiles()) {
             for (String[] algorithm : algorithms) {
-                Path caseRoot = Files.createTempDirectory(root, algorithm[0].toLowerCase() + "-");
-                Path folder = Files.createDirectory(caseRoot.resolve("files"));
-                Path file = Files.createFile(folder.resolve("empty.bin"));
-                Path catalog = caseRoot.resolve("catalog.xml");
-                writeUtf8(catalog, "<CATALOG/>\n");
+                Path file = files.folder.resolve("empty.bin");
+                Files.write(file, new byte[0]);
+                writeUtf8(files.catalog, "<CATALOG/>\n");
 
-                Invocation invocation = invoke(algorithm[0], catalog.toString(),
-                        folder.toString());
+                Invocation invocation = invoke(algorithm[0], files.catalog.toString(),
+                        files.folder.toString());
                 String expectedDigest = digest(algorithm[1], Files.readAllBytes(file));
                 assertEquals(0, invocation.exitCode,
                         "codigo de saida para " + algorithm[0]);
                 assertEquals(line("empty.bin", algorithm[0], expectedDigest, "NOT FOUND"),
                         invocation.stdout, "digest vazio para " + algorithm[0]);
                 assertEquals(expectedDigest,
-                        findDigest(parse(catalog), "empty.bin", algorithm[0]),
+                        findDigest(parse(files.catalog), "empty.bin", algorithm[0]),
                         "persistencia para " + algorithm[0]);
             }
-        } finally {
-            deleteRecursively(root);
         }
     }
 
     private static void testLargeBinaryFile() throws Exception {
-        Path root = Files.createTempDirectory("digest-calculator-binary-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            Path catalog = root.resolve("catalog.xml");
+        try (TestFiles files = new TestFiles()) {
             byte[] content = new byte[BUFFER_SIZE_FOR_TEST * 3 + 137];
             for (int i = 0; i < content.length; i++) {
                 content[i] = (byte) (i * 31 + 7);
             }
-            Files.write(folder.resolve("large.bin"), content);
+            Files.write(files.folder.resolve("large.bin"), content);
             String expectedDigest = digest("SHA-512", content);
-            writeUtf8(catalog, "<CATALOG>\n"
+            writeUtf8(files.catalog, "<CATALOG>\n"
                     + fileEntry("large.bin", "SHA512", expectedDigest.toUpperCase())
                     + "</CATALOG>\n");
 
-            Invocation invocation = invoke("sha512", catalog.toString(), folder.toString());
+            Invocation invocation = invoke("SHA512", files.catalog.toString(), files.folder.toString());
             assertEquals(0, invocation.exitCode, "codigo para arquivo binario grande");
             assertEquals(line("large.bin", "SHA512", expectedDigest, "OK"),
                     invocation.stdout, "leitura em multiplos blocos");
             assertEquals("", invocation.stderr, "stderr para arquivo binario grande");
-        } finally {
-            deleteRecursively(root);
         }
     }
 
@@ -243,62 +199,80 @@ public final class DigestCalculatorTest {
         assertContains(missingArguments.stdout, "Uso: java DigestCalculator",
                 "orientacao de uso");
         assertEquals("", missingArguments.stderr, "argumentos ausentes nao sao erro interno");
+        for (String[] args : new String[][] {
+            {"MD5"}, {"MD5", "catalog.xml"}, {"MD5", "catalog.xml", "files", "extra"}
+        }) {
+            Invocation incomplete = invoke(args);
+            assertEquals(1, incomplete.exitCode, "quantidade incorreta de argumentos");
+            assertContains(incomplete.stdout, "Uso: java DigestCalculator", "orientacao de uso");
+        }
 
-        Invocation invalidAlgorithm = invoke("CRC32", "x", "y");
-        assertEquals(1, invalidAlgorithm.exitCode, "algoritmo invalido");
-        assertContains(invalidAlgorithm.stderr, "tipo de digest invalido",
-                "mensagem de algoritmo invalido");
+        for (String invalid : new String[] {"CRC32", "sha256", " SHA256 ", "SHA-256"}) {
+            Invocation invalidAlgorithm = invoke(invalid, "x", "y");
+            assertEquals(1, invalidAlgorithm.exitCode, "algoritmo invalido: " + invalid);
+            assertContains(invalidAlgorithm.stderr, "tipo de digest invalido",
+                    "mensagem de algoritmo invalido");
+        }
 
-        Path root = Files.createTempDirectory("digest-calculator-paths-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            Path catalog = root.resolve("catalog.xml");
-            writeUtf8(catalog, "<CATALOG/>\n");
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.catalog, "<CATALOG/>\n");
 
             Invocation missingCatalog = invoke("SHA256",
-                    root.resolve("missing.xml").toString(), folder.toString());
-            assertEquals(1, missingCatalog.exitCode, "catalogo inexistente");
-            assertContains(missingCatalog.stderr, "catalogo nao existe",
+                    files.root.resolve("missing.xml").toString(), files.folder.toString());
+            assertEquals(2, missingCatalog.exitCode, "catalogo inexistente");
+            assertContains(missingCatalog.stderr, "missing.xml",
                     "mensagem para catalogo inexistente");
 
-            Invocation missingFolder = invoke("SHA256", catalog.toString(),
-                    root.resolve("missing-folder").toString());
-            assertEquals(1, missingFolder.exitCode, "pasta inexistente");
-            assertContains(missingFolder.stderr, "pasta de arquivos nao existe",
+            Invocation missingFolder = invoke("SHA256", files.catalog.toString(),
+                    files.root.resolve("missing-folder").toString());
+            assertEquals(2, missingFolder.exitCode, "pasta inexistente");
+            assertContains(missingFolder.stderr, "missing-folder",
                     "mensagem para pasta inexistente");
 
-            byte[] catalogBeforeEmptyRun = Files.readAllBytes(catalog);
-            Invocation emptyFolder = invoke("SHA256", catalog.toString(), folder.toString());
+            byte[] catalogBeforeEmptyRun = Files.readAllBytes(files.catalog);
+            Invocation emptyFolder = invoke("SHA256", files.catalog.toString(), files.folder.toString());
             assertEquals(0, emptyFolder.exitCode, "pasta vazia e valida");
             assertEquals("", emptyFolder.stdout, "pasta vazia nao gera linhas");
-            assertTrue(Arrays.equals(catalogBeforeEmptyRun, Files.readAllBytes(catalog)),
+            assertTrue(Arrays.equals(catalogBeforeEmptyRun, Files.readAllBytes(files.catalog)),
                     "pasta vazia nao regrava catalogo");
 
-            Path catalogInsideFolder = folder.resolve("inside.xml");
+            Path current = java.nio.file.Paths.get("").toAbsolutePath();
+            Invocation relativePaths = invoke("MD5", current.relativize(files.catalog).toString(),
+                    current.relativize(files.folder).toString());
+            assertEquals(0, relativePaths.exitCode, "caminhos relativos sao aceitos");
+            assertEquals("", relativePaths.stderr, "stderr para caminhos relativos");
+
+            Path catalogInsideFolder = files.folder.resolve("inside.xml");
             writeUtf8(catalogInsideFolder, "<CATALOG/>\n");
-            writeUtf8(folder.resolve("data.txt"), "dados-da-pasta");
+            writeUtf8(files.folder.resolve("data.txt"), "dados-da-pasta");
+            Path subfolder = Files.createDirectory(files.folder.resolve("subpasta"));
+            writeUtf8(subfolder.resolve("nao-processar.txt"), "dados-da-subpasta");
             String dataDigest = digest("SHA-256", bytes("dados-da-pasta"));
+            String catalogDigest = digest("SHA-256", Files.readAllBytes(catalogInsideFolder));
             Invocation inside = invoke("SHA256", catalogInsideFolder.toString(),
-                    folder.toString());
+                    files.folder.toString());
             assertEquals(0, inside.exitCode, "catalogo dentro da pasta deve ser aceito");
             assertEquals("", inside.stderr, "stderr com catalogo dentro da pasta");
-            assertEquals(line("data.txt", "SHA256", dataDigest, "NOT FOUND"), inside.stdout,
-                    "o proprio catalogo nao deve ser processado");
+            assertEquals(line("data.txt", "SHA256", dataDigest, "NOT FOUND")
+                    + line("inside.xml", "SHA256", catalogDigest, "NOT FOUND"), inside.stdout,
+                    "todos os arquivos da pasta, inclusive o catalogo, devem ser processados");
             Document insideCatalog = parse(catalogInsideFolder);
             assertEquals(dataDigest, findDigest(insideCatalog, "data.txt", "SHA256"),
                     "digest gravado no catalogo que esta dentro da pasta");
-            assertNull(findFileEntry(insideCatalog, "inside.xml"),
-                    "catalogo nao deve registrar a si mesmo");
-        } finally {
-            deleteRecursively(root);
+            assertEquals(catalogDigest, findDigest(insideCatalog, "inside.xml", "SHA256"),
+                    "digest do catalogo deve corresponder aos bytes anteriores a atualizacao");
+            String updatedCatalogDigest = digest("SHA-256", Files.readAllBytes(catalogInsideFolder));
+            Invocation insideAgain = invoke("SHA256", catalogInsideFolder.toString(),
+                    files.folder.toString());
+            assertEquals(line("data.txt", "SHA256", dataDigest, "OK")
+                    + line("inside.xml", "SHA256", updatedCatalogDigest, "NOT OK"),
+                    insideAgain.stdout, "alteracao do proprio catalogo deve ser detectada");
         }
     }
 
     private static void testEmptyCatalogFiles() throws Exception {
-        Path root = Files.createTempDirectory("digest-calculator-empty-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            writeUtf8(folder.resolve("a.txt"), "conteudo-a");
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.folder.resolve("a.txt"), "conteudo-a");
             String expectedDigest = digest("MD5", bytes("conteudo-a"));
             byte[][] contents = {
                 new byte[0],
@@ -306,83 +280,69 @@ public final class DigestCalculatorTest {
                 new byte[] {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF}
             };
             for (int i = 0; i < contents.length; i++) {
-                Path catalog = root.resolve("empty-" + i + ".xml");
-                Files.write(catalog, contents[i]);
-                Invocation invocation = invoke("MD5", catalog.toString(), folder.toString());
+                Files.write(files.catalog, contents[i]);
+                Invocation invocation = invoke("MD5", files.catalog.toString(), files.folder.toString());
                 assertEquals(0, invocation.exitCode, "codigo de saida da lista vazia " + i);
                 assertEquals("", invocation.stderr, "stderr da lista vazia " + i);
                 assertEquals(line("a.txt", "MD5", expectedDigest, "NOT FOUND"),
                         invocation.stdout, "saida com lista vazia " + i);
-                assertEquals(expectedDigest, findDigest(parse(catalog), "a.txt", "MD5"),
+                assertEquals(expectedDigest, findDigest(parse(files.catalog), "a.txt", "MD5"),
                         "lista vazia deve receber o novo FILE_ENTRY " + i);
             }
-        } finally {
-            deleteRecursively(root);
         }
     }
 
-    private static void testLenientCatalogEntries() throws Exception {
-        Path root = Files.createTempDirectory("digest-calculator-lenient-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            Path catalog = root.resolve("catalog.xml");
-            writeUtf8(folder.resolve("dup.txt"), "conteudo-dup");
-            writeUtf8(folder.resolve("hex.txt"), "conteudo-hex");
-            writeUtf8(folder.resolve("rep.txt"), "conteudo-rep");
-            writeUtf8(folder.resolve("tipo.txt"), "conteudo-tipo");
-
-            String dupDigest = digest("SHA-256", bytes("conteudo-dup"));
+    private static void testCatalogValidationAndHexWarnings() throws Exception {
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.folder.resolve("chars.txt"), "conteudo-chars");
+            writeUtf8(files.folder.resolve("hex.txt"), "conteudo-hex");
+            writeUtf8(files.folder.resolve("new.txt"), "conteudo-novo");
+            String charsDigest = digest("SHA-256", bytes("conteudo-chars"));
             String hexDigest = digest("SHA-256", bytes("conteudo-hex"));
-            String repDigest = digest("SHA-256", bytes("conteudo-rep"));
-            String tipoDigest = digest("SHA-256", bytes("conteudo-tipo"));
-            writeUtf8(catalog, "<CATALOG>\n"
-                    + fileEntry("dup.txt", "MD5", digest("MD5", bytes("conteudo-dup")))
-                    + fileEntry("hex.txt", "SHA256", "123abc")
-                    + "  <FILE_ENTRY>\n"
-                    + "    <FILE_NAME>rep.txt</FILE_NAME>\n"
-                    + "    " + digestEntry("SHA256", repDigest) + "\n"
-                    + "    " + digestEntry("SHA256", digest("SHA-256", bytes("outro"))) + "\n"
-                    + "  </FILE_ENTRY>\n"
-                    + fileEntry("tipo.txt", "SHA-256", tipoDigest)
-                    + fileEntry("dup.txt", "SHA256", dupDigest)
-                    + "</CATALOG>\n");
+            String newDigest = digest("SHA-256", bytes("conteudo-novo"));
+            String invalidCharacters = "z" + charsDigest.substring(1);
+            writeUtf8(files.catalog, "<CATALOG>"
+                    + fileEntry("chars.txt", "SHA256", invalidCharacters)
+                    + fileEntry("hex.txt", "SHA256", "123abc") + "</CATALOG>");
 
-            Invocation invocation = invoke("SHA256", catalog.toString(), folder.toString());
-            assertEquals(0, invocation.exitCode, "entradas problematicas nao abortam");
-            String expected = line("dup.txt", "SHA256", dupDigest, "OK")
+            Invocation result = invoke("SHA256", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, result.exitCode, "hexadecimal invalido gera somente aviso");
+            assertEquals(line("chars.txt", "SHA256", charsDigest, "NOT OK")
                     + line("hex.txt", "SHA256", hexDigest, "NOT OK")
-                    + line("rep.txt", "SHA256", repDigest, "OK")
-                    + line("tipo.txt", "SHA256", tipoDigest, "NOT FOUND");
-            assertEquals(expected, invocation.stdout, "saida com entradas problematicas");
-            assertContains(invocation.stderr, "DIGEST_HEX invalido para hex.txt",
-                    "aviso de DIGEST_HEX invalido");
-            assertContains(invocation.stderr, "DIGEST_TYPE invalido ignorado para tipo.txt",
-                    "aviso de DIGEST_TYPE invalido");
-            assertContains(invocation.stderr, "SHA256 repetido para rep.txt",
-                    "aviso de tipo repetido");
-            assertTrue(!invocation.stderr.contains("dup.txt"),
-                    "FILE_NAME repetido sem conflito nao gera aviso");
-
-            Document updated = parse(catalog);
-            assertEquals(tipoDigest, findDigest(updated, "tipo.txt", "SHA256"),
-                    "NOT FOUND gravado mesmo com DIGEST_TYPE invalido no registro");
+                    + line("new.txt", "SHA256", newDigest, "NOT FOUND"),
+                    result.stdout, "status com hexadecimal invalido");
+            for (String name : new String[] {"chars.txt", "hex.txt"}) {
+                assertContains(result.stderr, "DIGEST_HEX invalido para " + name,
+                        "aviso de tamanho ou caracteres invalidos");
+            }
+            Document updated = parse(files.catalog);
+            assertEquals(invalidCharacters, findDigest(updated, "chars.txt", "SHA256"),
+                    "hexadecimal com caracteres invalidos preservado");
             assertEquals("123abc", findDigest(updated, "hex.txt", "SHA256"),
-                    "DIGEST_HEX invalido nao deve ser substituido");
-        } finally {
-            deleteRecursively(root);
+                    "hexadecimal curto preservado");
+            assertEquals(newDigest, findDigest(updated, "new.txt", "SHA256"),
+                    "NOT FOUND acrescentado apesar dos avisos");
+
+            for (String invalid : new String[] {"CRC32", "sha256", " SHA256 ", "SHA-256"}) {
+                String xml = "<CATALOG>" + fileEntry("hex.txt", invalid, hexDigest) + "</CATALOG>";
+                writeUtf8(files.catalog, xml);
+                Invocation rejected = invoke("SHA256", files.catalog.toString(), files.folder.toString());
+                assertEquals(2, rejected.exitCode, "DIGEST_TYPE invalido deve encerrar a execucao");
+                assertContains(rejected.stderr, "tipo de digest invalido", "erro de DIGEST_TYPE");
+                assertEquals("", rejected.stdout, "catalogo invalido nao gera listagem");
+                assertEquals(xml, new String(Files.readAllBytes(files.catalog), StandardCharsets.UTF_8),
+                        "catalogo invalido permanece inalterado");
+            }
         }
     }
 
     private static void testSavedXmlFormatting() throws Exception {
-        Path root = Files.createTempDirectory("digest-calculator-format-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            Path catalog = root.resolve("catalog.xml");
-            writeUtf8(folder.resolve("Arquivo1.dat"), "conteudo-1");
-            writeUtf8(folder.resolve("Arquivo2.dat"), "conteudo-2");
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.folder.resolve("Arquivo1.dat"), "conteudo-1");
+            writeUtf8(files.folder.resolve("Arquivo2.dat"), "conteudo-2");
             String sha1 = digest("SHA-1", bytes("conteudo-1"));
-            /* Layout do exemplo do enunciado: tabs e espaco antes do hex. */
-            writeUtf8(catalog, "<CATALOG>\n"
+            // Usa tabs e espaco antes do digest, como no exemplo do enunciado.
+            writeUtf8(files.catalog, "<CATALOG>\n"
                     + "\t<FILE_ENTRY>\n"
                     + "\t\t<FILE_NAME>Arquivo1.dat</FILE_NAME>\n"
                     + "\t\t<DIGEST_ENTRY>\n"
@@ -393,86 +353,75 @@ public final class DigestCalculatorTest {
                     + "</CATALOG>\n");
 
             for (String type : new String[] {"SHA256", "MD5"}) {
-                Invocation invocation = invoke(type, catalog.toString(), folder.toString());
+                Invocation invocation = invoke(type, files.catalog.toString(), files.folder.toString());
                 assertEquals(0, invocation.exitCode, "codigo de saida com " + type);
                 assertEquals("", invocation.stderr, "stderr com " + type);
             }
 
-            String expected = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                    + "<CATALOG>\n"
-                    + "    <FILE_ENTRY>\n"
-                    + "        <FILE_NAME>Arquivo1.dat</FILE_NAME>\n"
-                    + formattedDigestEntry("SHA1", " " + sha1)
-                    + formattedDigestEntry("SHA256", digest("SHA-256", bytes("conteudo-1")))
-                    + formattedDigestEntry("MD5", digest("MD5", bytes("conteudo-1")))
-                    + "    </FILE_ENTRY>\n"
-                    + "    <FILE_ENTRY>\n"
-                    + "        <FILE_NAME>Arquivo2.dat</FILE_NAME>\n"
-                    + formattedDigestEntry("SHA256", digest("SHA-256", bytes("conteudo-2")))
-                    + formattedDigestEntry("MD5", digest("MD5", bytes("conteudo-2")))
-                    + "    </FILE_ENTRY>\n"
-                    + "</CATALOG>";
-            String actual = new String(Files.readAllBytes(catalog), StandardCharsets.UTF_8)
-                    .replace("\r\n", "\n").trim();
-            assertEquals(expected, actual, "XML regravado com indentacao uniforme");
-        } finally {
-            deleteRecursively(root);
+            Document updated = parse(files.catalog);
+            assertEquals("CATALOG", updated.getDocumentElement().getTagName(), "raiz mantida");
+            assertEquals("UTF-8", updated.getXmlEncoding(), "codificacao do XML");
+            assertEquals(2, updated.getElementsByTagName("FILE_ENTRY").getLength(), "dois arquivos");
+            assertEquals(5, updated.getElementsByTagName("DIGEST_ENTRY").getLength(), "cinco digests");
+            assertEquals(sha1, findDigest(updated, "Arquivo1.dat", "SHA1"), "SHA1 original preservado");
+            assertEquals("Arquivo2.dat", lastFileEntryName(updated), "novo arquivo no final");
+            for (int i = 1; i <= 2; i++) {
+                String name = "Arquivo" + i + ".dat";
+                byte[] content = bytes("conteudo-" + i);
+                assertEquals(digest("SHA-256", content), findDigest(updated, name, "SHA256"),
+                        "SHA256 acrescentado ao arquivo correto");
+                assertEquals(digest("MD5", content), findDigest(updated, name, "MD5"),
+                        "MD5 acrescentado ao arquivo correto");
+            }
+            Invocation again = invoke("SHA256", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, again.exitCode, "XML regravado pode ser relido");
+            assertEquals(line("Arquivo1.dat", "SHA256", digest("SHA-256", bytes("conteudo-1")), "OK")
+                    + line("Arquivo2.dat", "SHA256", digest("SHA-256", bytes("conteudo-2")), "OK"),
+                    again.stdout, "digests persistem apos regravacoes");
         }
     }
 
-    private static void testXmlValidationAndXxeRejection() throws Exception {
-        Path root = Files.createTempDirectory("digest-calculator-xml-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            writeUtf8(folder.resolve("file.txt"), "conteudo");
+    private static void testXmlValidation() throws Exception {
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.folder.resolve("file.txt"), "conteudo");
 
-            Path wrongRoot = root.resolve("wrong-root.xml");
+            Path wrongRoot = files.root.resolve("wrong-root.xml");
             writeUtf8(wrongRoot, "<WRONG/>\n");
             byte[] wrongRootBefore = Files.readAllBytes(wrongRoot);
             Invocation wrongRootResult = invoke("SHA256", wrongRoot.toString(),
-                    folder.toString());
+                    files.folder.toString());
             assertEquals(2, wrongRootResult.exitCode, "raiz XML invalida");
             assertContains(wrongRootResult.stderr, "tag raiz deve ser CATALOG",
                     "mensagem de raiz invalida");
             assertTrue(Arrays.equals(wrongRootBefore, Files.readAllBytes(wrongRoot)),
                     "XML invalido deve permanecer inalterado");
 
-            Path missingHex = root.resolve("missing-hex.xml");
+            Path missingHex = files.root.resolve("missing-hex.xml");
             writeUtf8(missingHex, "<CATALOG><FILE_ENTRY><FILE_NAME>file.txt</FILE_NAME>"
                     + "<DIGEST_ENTRY><DIGEST_TYPE>SHA256</DIGEST_TYPE></DIGEST_ENTRY>"
                     + "</FILE_ENTRY></CATALOG>");
             byte[] missingHexBefore = Files.readAllBytes(missingHex);
             Invocation missingHexResult = invoke("SHA256", missingHex.toString(),
-                    folder.toString());
+                    files.folder.toString());
             assertEquals(2, missingHexResult.exitCode, "DIGEST_ENTRY sem DIGEST_HEX");
             assertContains(missingHexResult.stderr, "exatamente um DIGEST_HEX",
                     "mensagem de DIGEST_HEX ausente");
             assertTrue(Arrays.equals(missingHexBefore, Files.readAllBytes(missingHex)),
                     "catalogo estruturalmente invalido deve permanecer inalterado");
 
-            Path secret = root.resolve("secret.txt");
-            writeUtf8(secret, "NAO_DEVE_SER_LIDO");
-            Path xxe = root.resolve("xxe.xml");
-            String secretUri = secret.toUri().toASCIIString();
-            writeUtf8(xxe, "<?xml version=\"1.0\"?>"
-                    + "<!DOCTYPE CATALOG [<!ENTITY xxe SYSTEM \"" + secretUri + "\">]>"
-                    + "<CATALOG><FILE_ENTRY><FILE_NAME>&xxe;</FILE_NAME>"
-                    + digestEntry("SHA256", digest("SHA-256", bytes("conteudo")))
-                    + "</FILE_ENTRY></CATALOG>");
-            byte[] xxeBefore = Files.readAllBytes(xxe);
-            Invocation xxeResult = invoke("SHA256", xxe.toString(), folder.toString());
-            assertEquals(2, xxeResult.exitCode, "DOCTYPE/XXE deve ser rejeitado");
-            assertTrue(!xxeResult.stderr.contains("NAO_DEVE_SER_LIDO"),
-                    "conteudo externo nao deve aparecer na mensagem");
-            assertTrue(Arrays.equals(xxeBefore, Files.readAllBytes(xxe)),
-                    "catalogo com XXE deve permanecer inalterado");
-        } finally {
-            deleteRecursively(root);
+            Path malformed = files.root.resolve("malformed.xml");
+            writeUtf8(malformed, "<CATALOG><FILE_ENTRY></CATALOG>");
+            byte[] malformedBefore = Files.readAllBytes(malformed);
+            Invocation malformedResult = invoke("SHA256", malformed.toString(), files.folder.toString());
+            assertEquals(2, malformedResult.exitCode, "XML malformado deve ser rejeitado");
+            assertContains(malformedResult.stderr, "Erro:", "erro de sintaxe XML comunicado");
+            assertTrue(Arrays.equals(malformedBefore, Files.readAllBytes(malformed)),
+                    "XML malformado deve permanecer inalterado");
         }
     }
 
     private static void testMainInSeparateProcess() throws Exception {
-        ProcessInvocation withoutArguments = invokeMain();
+        Invocation withoutArguments = invoke();
         assertEquals(1, withoutArguments.exitCode,
                 "codigo real do processo sem argumentos");
         assertContains(withoutArguments.stdout, "Uso: java DigestCalculator",
@@ -480,71 +429,215 @@ public final class DigestCalculatorTest {
         assertEquals("", withoutArguments.stderr,
                 "stderr do processo real sem argumentos");
 
-        Path root = Files.createTempDirectory("digest-calculator-process-");
-        try {
-            Path folder = Files.createDirectory(root.resolve("files"));
-            Path catalog = root.resolve("catalog.xml");
-            writeUtf8(folder.resolve("main.txt"), "processo-separado");
-            writeUtf8(catalog, "<CATALOG/>\n");
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.folder.resolve("main.txt"), "processo-separado");
+            writeUtf8(files.catalog, "<CATALOG/>\n");
 
             String expectedDigest = digest("SHA-1", bytes("processo-separado"));
-            ProcessInvocation valid = invokeMain("SHA1", catalog.toString(),
-                    folder.toString());
+            Invocation valid = invoke("SHA1", files.catalog.toString(),
+                    files.folder.toString());
             assertEquals(0, valid.exitCode, "codigo real do processo valido");
             assertEquals(line("main.txt", "SHA1", expectedDigest, "NOT FOUND"),
                     valid.stdout, "stdout do processo Java real");
             assertEquals("", valid.stderr, "stderr do processo Java real");
-            assertEquals(expectedDigest, findDigest(parse(catalog), "main.txt", "SHA1"),
+            assertEquals(expectedDigest, findDigest(parse(files.catalog), "main.txt", "SHA1"),
                     "processo real deve persistir o digest");
-        } finally {
-            deleteRecursively(root);
+        }
+    }
+
+    private static void testKnownVectorsAndClassExample() throws Exception {
+        // Digests conhecidos para conferir se o calculo esta certo.
+        String[][] vectors = {
+            {"MD5", "abc", "900150983cd24fb0d6963f7d28e17f72"},
+            {"SHA1", "abc", "a9993e364706816aba3e25717850c26c9cd0d89d"},
+            {"SHA256", "abc", "ba7816bf8f01cfea414140de5dae2223"
+                    + "b00361a396177a9cb410ff61f20015ad"},
+            {"SHA512", "abc", "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20"
+                    + "a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454"
+                    + "d4423643ce80e2a9ac94fa54ca49f"},
+            {"MD5", "", "d41d8cd98f00b204e9800998ecf8427e"},
+            {"SHA1", "", "da39a3ee5e6b4b0d3255bfef95601890afd80709"},
+            {"SHA256", "", "e3b0c44298fc1c149afbf4c8996fb924"
+                    + "27ae41e4649b934ca495991b7852b855"},
+            {"SHA512", "", "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc"
+                    + "83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f"
+                    + "63b931bd47417a81a538327af927da3e"},
+            // Mesmo texto e digest do exemplo de Java Security, na pagina 19.
+            {"SHA256", "Este eh um teste!", "bae8f0ffa90cb82565e8f745e21a881a"
+                    + "1649af5432d19f0b8abc90aa652165ab"}
+        };
+        try (TestFiles files = new TestFiles()) {
+            for (String[] vector : vectors) {
+                writeUtf8(files.catalog, "<CATALOG/>");
+                writeUtf8(files.folder.resolve("entrada.txt"), vector[1]);
+                Invocation result = invoke(vector[0], files.catalog.toString(), files.folder.toString());
+                assertEquals(0, result.exitCode, "vetor conhecido " + vector[0]);
+                assertEquals("", result.stderr, "stderr do vetor conhecido");
+                assertEquals(line("entrada.txt", vector[0], vector[2], "NOT FOUND"),
+                        result.stdout, "vetor conhecido para [" + vector[1] + "]");
+                assertEquals(vector[2], findDigest(parse(files.catalog), "entrada.txt", vector[0]),
+                        "persistencia do vetor conhecido");
+            }
+        }
+    }
+
+    private static void testAllDigestsInOneEntry() throws Exception {
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.folder.resolve("arquivo.txt"), "quatro algoritmos");
+            writeUtf8(files.catalog, "<CATALOG/>");
+            String[][] algorithms = {
+                {"SHA512", "SHA-512"}, {"MD5", "MD5"},
+                {"SHA256", "SHA-256"}, {"SHA1", "SHA-1"}
+            };
+            for (String[] algorithm : algorithms) {
+                Invocation first = invoke(algorithm[0], files.catalog.toString(), files.folder.toString());
+                assertEquals(0, first.exitCode, "inclusao de " + algorithm[0]);
+                assertEquals(line("arquivo.txt", algorithm[0],
+                        digest(algorithm[1], bytes("quatro algoritmos")), "NOT FOUND"),
+                        first.stdout, "algoritmo ainda nao catalogado");
+            }
+            Document updated = parse(files.catalog);
+            assertEquals(1, updated.getElementsByTagName("FILE_ENTRY").getLength(),
+                    "um unico FILE_ENTRY para os quatro algoritmos");
+            assertEquals(4, updated.getElementsByTagName("DIGEST_ENTRY").getLength(),
+                    "quatro DIGEST_ENTRY no mesmo arquivo");
+            byte[] before = Files.readAllBytes(files.catalog);
+            for (String[] algorithm : algorithms) {
+                Invocation again = invoke(algorithm[0], files.catalog.toString(), files.folder.toString());
+                assertEquals(0, again.exitCode, "consulta de " + algorithm[0]);
+                assertEquals(line("arquivo.txt", algorithm[0],
+                        digest(algorithm[1], bytes("quatro algoritmos")), "OK"),
+                        again.stdout, "algoritmo existente em qualquer ordem");
+            }
+            assertTrue(Arrays.equals(before, Files.readAllBytes(files.catalog)),
+                    "consulta dos quatro digests nao deve regravar o XML");
+        }
+    }
+
+    private static void testCollisionPrecedence() throws Exception {
+        try (TestFiles files = new TestFiles()) {
+            String value = digest("MD5", bytes("conteudo-igual"));
+            String different = digest("MD5", bytes("conteudo-antigo"));
+            String[] names = {"a-ok.txt", "b-not-ok.txt", "c-not-found.txt"};
+            for (String name : names) {
+                writeUtf8(files.folder.resolve(name), "conteudo-igual");
+            }
+            String original = "<CATALOG>" + fileEntry(names[0], "MD5", value)
+                    + fileEntry(names[1], "MD5", different) + "</CATALOG>";
+            writeUtf8(files.catalog, original);
+            Invocation inFolder = invoke("MD5", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, inFolder.exitCode, "colisoes na pasta");
+            String expected = "";
+            for (String name : names) {
+                expected += line(name, "MD5", value, "COLISION");
+            }
+            assertEquals(expected, inFolder.stdout, "colisao prevalece sobre OK/NOT OK/NOT FOUND");
+            assertEquals(original, new String(Files.readAllBytes(files.catalog), StandardCharsets.UTF_8),
+                    "somente colisoes nao alteram o catalogo");
+            for (String name : names) {
+                Files.delete(files.folder.resolve(name));
+            }
+
+            // Agora verifica a colisao com um arquivo que so esta no catalogo.
+            original = "<CATALOG>" + fileEntry(names[0], "MD5", value)
+                    + fileEntry(names[1], "MD5", different)
+                    + fileEntry("ausente.txt", "MD5", value.toUpperCase()) + "</CATALOG>";
+            writeUtf8(files.catalog, original);
+            for (String name : names) {
+                writeUtf8(files.folder.resolve(name), "conteudo-igual");
+                Invocation result = invoke("MD5", files.catalog.toString(), files.folder.toString());
+                assertEquals(0, result.exitCode, "colisao com nome do catalogo");
+                assertEquals(line(name, "MD5", value, "COLISION"), result.stdout,
+                        "colisao catalogada prevalece para " + name);
+                assertEquals(original,
+                        new String(Files.readAllBytes(files.catalog), StandardCharsets.UTF_8),
+                        "colisoes catalogadas nao alteram o XML");
+                Files.delete(files.folder.resolve(name));
+            }
+        }
+    }
+
+    private static void testExactFileNames() throws Exception {
+        try (TestFiles files = new TestFiles()) {
+            List<String> names = new ArrayList<String>();
+            names.add(" dados.txt");
+            names.add("a\u00e7\u00e3o & dados.txt");
+            if (!System.getProperty("os.name").toLowerCase().contains("win")) {
+                names.add("fim.txt ");
+                names.add("   ");
+                names.add("<arquivo>.txt");
+                names.add("barra\\invertida.txt");
+            }
+            for (String name : names) {
+                writeUtf8(files.folder.resolve(name), "conteudo de " + name);
+            }
+            writeUtf8(files.catalog, "<CATALOG/>");
+            Invocation first = invoke("SHA256", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, first.exitCode, "primeira execucao com nomes especiais");
+            Invocation second = invoke("SHA256", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, second.exitCode, "segunda execucao com nomes especiais");
+            assertEquals(first.stdout.replace("(NOT FOUND)", "(OK)"), second.stdout,
+                    "FILE_NAME deve preservar o nome exato, incluindo espacos");
+            assertEquals(names.size(), parse(files.catalog).getElementsByTagName("FILE_ENTRY").getLength(),
+                    "nomes especiais nao devem gerar registros duplicados");
+
+            // Adiciona outro algoritmo para conferir se os nomes continuam iguais.
+            Invocation anotherType = invoke("MD5", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, anotherType.exitCode, "inclusao de outro algoritmo");
+            Invocation third = invoke("SHA256", files.catalog.toString(), files.folder.toString());
+            assertEquals(0, third.exitCode, "terceira execucao com nomes especiais");
+            assertEquals(second.stdout, third.stdout, "reindentacao nao pode apagar o nome");
+        }
+    }
+
+    private static void testOutputBeforeCatalogUpdate() throws Exception {
+        try (TestFiles files = new TestFiles()) {
+            writeUtf8(files.catalog, "<CATALOG/>");
+            byte[] before = Files.readAllBytes(files.catalog);
+            writeUtf8(files.folder.resolve("a.txt"), "a");
+            writeUtf8(files.folder.resolve("b.txt"), "b");
+            try {
+                assertTrue(files.catalog.toFile().setWritable(false, false), "catalogo somente leitura");
+                assertTrue(!Files.isWritable(files.catalog), "teste requer usuario sem privilegio de escrita");
+                Invocation result = invoke("MD5", files.catalog.toString(), files.folder.toString());
+                assertEquals(2, result.exitCode, "falha de gravacao deve encerrar com erro");
+                assertEquals(line("a.txt", "MD5", digest("MD5", bytes("a")), "NOT FOUND")
+                        + line("b.txt", "MD5", digest("MD5", bytes("b")), "NOT FOUND"),
+                        result.stdout, "lista completa impressa antes da tentativa de gravacao");
+                assertContains(result.stderr, "Erro:", "falha de escrita comunicada");
+                assertTrue(Arrays.equals(before, Files.readAllBytes(files.catalog)),
+                        "catalogo somente leitura permanece inalterado");
+            } finally {
+                files.catalog.toFile().setWritable(true);
+            }
         }
     }
 
     private static Invocation invoke(String... args) throws Exception {
-        ByteArrayOutputStream stdoutBytes = new ByteArrayOutputStream();
-        ByteArrayOutputStream stderrBytes = new ByteArrayOutputStream();
-        PrintStream stdout = new PrintStream(stdoutBytes, true, "UTF-8");
-        PrintStream stderr = new PrintStream(stderrBytes, true, "UTF-8");
-        int exitCode;
-        try {
-            exitCode = DigestCalculator.run(args, stdout, stderr);
-        } finally {
-            stdout.flush();
-            stderr.flush();
-            stdout.close();
-            stderr.close();
-        }
-        return new Invocation(exitCode, stdoutBytes.toString("UTF-8"),
-                stderrBytes.toString("UTF-8"));
-    }
-
-    private static ProcessInvocation invokeMain(String... args) throws Exception {
         boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
         String javaExecutable = java.nio.file.Paths.get(System.getProperty("java.home"),
                 "bin", windows ? "java.exe" : "java").toString();
         List<String> command = new ArrayList<String>();
         command.add(javaExecutable);
+        command.add("-Dfile.encoding=UTF-8");
         command.add("-cp");
         command.add(System.getProperty("java.class.path"));
         command.add("DigestCalculator");
         command.addAll(Arrays.asList(args));
 
-        Process process = new ProcessBuilder(command).start();
-        String stdout = readUtf8(process.getInputStream());
-        String stderr = readUtf8(process.getErrorStream());
-        int exitCode = process.waitFor();
-        return new ProcessInvocation(exitCode, stdout, stderr);
-    }
-
-    private static String readUtf8(InputStream input) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int bytesRead;
-        while ((bytesRead = input.read(buffer)) != -1) {
-            output.write(buffer, 0, bytesRead);
+        Path capture = Files.createTempDirectory("digest-calculator-output-");
+        try {
+            Path stdout = capture.resolve("stdout.txt");
+            Path stderr = capture.resolve("stderr.txt");
+            Process process = new ProcessBuilder(command)
+                    .redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
+            int exitCode = process.waitFor();
+            return new Invocation(exitCode,
+                    new String(Files.readAllBytes(stdout), StandardCharsets.UTF_8),
+                    new String(Files.readAllBytes(stderr), StandardCharsets.UTF_8));
+        } finally {
+            deleteRecursively(capture);
         }
-        return output.toString("UTF-8");
     }
 
     private static String fileEntry(String fileName, String digestType, String digestHex) {
@@ -557,13 +650,6 @@ public final class DigestCalculatorTest {
     private static String digestEntry(String digestType, String digestHex) {
         return "<DIGEST_ENTRY><DIGEST_TYPE>" + digestType + "</DIGEST_TYPE>"
                 + "<DIGEST_HEX>" + digestHex + "</DIGEST_HEX></DIGEST_ENTRY>";
-    }
-
-    private static String formattedDigestEntry(String digestType, String digestHex) {
-        return "        <DIGEST_ENTRY>\n"
-                + "            <DIGEST_TYPE>" + digestType + "</DIGEST_TYPE>\n"
-                + "            <DIGEST_HEX>" + digestHex + "</DIGEST_HEX>\n"
-                + "        </DIGEST_ENTRY>\n";
     }
 
     private static String line(String fileName, String type, String digest, String status) {
@@ -598,7 +684,7 @@ public final class DigestCalculatorTest {
             Element entry = (Element) entries.item(i);
             NodeList names = entry.getElementsByTagName("FILE_NAME");
             if (names.getLength() == 1
-                    && fileName.equals(names.item(0).getTextContent().trim())) {
+                    && fileName.equals(names.item(0).getTextContent())) {
                 return entry;
             }
         }
@@ -700,6 +786,21 @@ public final class DigestCalculatorTest {
         }
     }
 
+    // Cria os arquivos temporarios de cada teste e apaga tudo no final.
+    private static final class TestFiles implements AutoCloseable {
+        private final Path root = Files.createTempDirectory("digest-calculator-test-");
+        private final Path folder = Files.createDirectory(root.resolve("pasta com espacos"));
+        private final Path catalog = root.resolve("catalogo com espacos.xml");
+
+        private TestFiles() throws IOException {
+        }
+
+        @Override
+        public void close() throws IOException {
+            deleteRecursively(root);
+        }
+    }
+
     private interface CheckedTest {
         void run() throws Exception;
     }
@@ -710,18 +811,6 @@ public final class DigestCalculatorTest {
         private final String stderr;
 
         private Invocation(int exitCode, String stdout, String stderr) {
-            this.exitCode = exitCode;
-            this.stdout = stdout;
-            this.stderr = stderr;
-        }
-    }
-
-    private static final class ProcessInvocation {
-        private final int exitCode;
-        private final String stdout;
-        private final String stderr;
-
-        private ProcessInvocation(int exitCode, String stdout, String stderr) {
             this.exitCode = exitCode;
             this.stdout = stdout;
             this.stderr = stderr;

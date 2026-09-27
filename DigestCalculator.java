@@ -1,22 +1,18 @@
-/*
- * Aluno 1: Rafael Soares Estevão
- * Matrícula 1: 2320470
- * Aluno 2: ________________________________________________
- * Matrícula 2: __________________________________
- */
+
+// Rafael Soares Estevão 2320470
+// Dante Honorato Navaza 2321406
+
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.*;
 import java.util.*;
-import javax.xml.XMLConstants;
 import javax.xml.parsers.*;
 import javax.xml.transform.*;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.*;
-import org.xml.sax.helpers.DefaultHandler;
 
 public final class DigestCalculator {
     private static final int BUFFER_SIZE = 8192;
@@ -25,16 +21,10 @@ public final class DigestCalculator {
     }
 
     public static void main(String[] args) {
-        int code = run(args, System.out, System.err);
-        if (code != 0) {
-            System.exit(code);
-        }
-    }
-
-    static int run(String[] args, PrintStream out, PrintStream err) {
-        if (args == null || args.length != 3) {
-            usage(out);
-            return 1;
+        if (args.length != 3) {
+            usage();
+            System.exit(1);
+            return;
         }
 
         DigestType type;
@@ -42,20 +32,27 @@ public final class DigestCalculator {
         Path folder;
         try {
             type = DigestType.parse(args[0]);
-            catalogPath = Paths.get(args[1]).toAbsolutePath().normalize();
-            folder = Paths.get(args[2]).toAbsolutePath().normalize();
-            validatePaths(catalogPath, folder);
+            catalogPath = Paths.get(args[1]);
+            folder = Paths.get(args[2]);
         } catch (Exception e) {
-            err.println("Erro: " + message(e));
-            usage(out);
-            return 1;
+            System.err.println("Erro: " + message(e));
+            usage();
+            System.exit(1);
+            return;
         }
 
         try {
-            Catalog catalog = Catalog.load(catalogPath, err);
-            List<Result> results = calculate(folder, catalogPath, type);
+            Catalog catalog = Catalog.load(catalogPath);
+            List<Result> results = calculate(folder, type);
             classify(results, catalog, type);
 
+            // Mostra o resultado de cada arquivo antes de atualizar o catalogo.
+            for (Result result : results) {
+                System.out.printf("%s %s %s (%s)%n",
+                        result.name, type.externalName, result.hex, result.status);
+            }
+
+            // So adiciona ao catalogo os digests com status NOT FOUND.
             boolean changed = false;
             for (Result result : results) {
                 if ("NOT FOUND".equals(result.status)) {
@@ -67,19 +64,14 @@ public final class DigestCalculator {
                 catalog.save(catalogPath);
             }
 
-            for (Result result : results) {
-                out.printf("%s %s %s (%s)%n",
-                        result.name, type.externalName, result.hex, result.status);
-            }
-            return 0;
         } catch (Exception e) {
-            err.println("Erro: " + message(e));
-            return 2;
+            System.err.println("Erro: " + message(e));
+            System.exit(2);
         }
     }
 
-    private static void usage(PrintStream out) {
-        out.println("Uso: java DigestCalculator <MD5|SHA1|SHA256|SHA512> "
+    private static void usage() {
+        System.out.println("Java DigestCalculator <MD5|SHA1|SHA256|SHA512> "
                 + "<arquivo_catalogo_xml> <pasta_arquivos>");
     }
 
@@ -87,23 +79,12 @@ public final class DigestCalculator {
         return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
     }
 
-    private static void validatePaths(Path catalog, Path folder) {
-        if (!Files.isRegularFile(catalog) || !Files.isReadable(catalog)) {
-            throw new IllegalArgumentException(
-                    "o catalogo nao existe ou nao pode ser lido: " + catalog);
-        }
-        if (!Files.isDirectory(folder) || !Files.isReadable(folder)) {
-            throw new IllegalArgumentException(
-                    "a pasta de arquivos nao existe ou nao pode ser lida: " + folder);
-        }
-    }
-
-    private static List<Result> calculate(Path folder, Path catalog, DigestType type)
+    private static List<Result> calculate(Path folder, DigestType type)
             throws IOException, NoSuchAlgorithmException {
         List<Path> files = new ArrayList<Path>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(folder)) {
             for (Path file : stream) {
-                if (Files.isRegularFile(file) && !Files.isSameFile(file, catalog)) {
+                if (Files.isRegularFile(file)) {
                     files.add(file);
                 }
             }
@@ -121,11 +102,13 @@ public final class DigestCalculator {
         List<Result> results = new ArrayList<Result>();
         byte[] buffer = new byte[BUFFER_SIZE];
         for (Path file : files) {
+            // Cria o MessageDigest seguindo o exemplo da aula.
             MessageDigest digest = MessageDigest.getInstance(type.jcaName);
             try (InputStream input = Files.newInputStream(file)) {
                 int count;
                 while ((count = input.read(buffer)) != -1) {
                     if (count > 0) {
+                        // O ultimo bloco pode ter menos bytes que o tamanho do buffer.
                         digest.update(buffer, 0, count);
                     }
                 }
@@ -135,15 +118,14 @@ public final class DigestCalculator {
         return results;
     }
 
-    private static String hex(byte[] bytes) {
-        final char[] digits = "0123456789abcdef".toCharArray();
-        char[] result = new char[bytes.length * 2];
-        for (int i = 0; i < bytes.length; i++) {
-            int value = bytes[i] & 0xff;
-            result[i * 2] = digits[value >>> 4];
-            result[i * 2 + 1] = digits[value & 0x0f];
+    private static String hex(byte[] digest) {
+        // Converte para hexadecimal usando o codigo do exemplo da aula.
+        StringBuffer buf = new StringBuffer();
+        for (int i = 0; i < digest.length; i++) {
+            String hex = Integer.toHexString(0x0100 + (digest[i] & 0x00FF)).substring(1);
+            buf.append((hex.length() < 2 ? "0" : "") + hex);
         }
-        return new String(result);
+        return buf.toString();
     }
 
     private static void classify(List<Result> results, Catalog catalog, DigestType type) {
@@ -188,7 +170,7 @@ public final class DigestCalculator {
 
         private static DigestType parse(String value) {
             for (DigestType type : values()) {
-                if (type.externalName.equalsIgnoreCase(value == null ? "" : value.trim())) {
+                if (type.externalName.equals(value)) {
                     return type;
                 }
             }
@@ -228,18 +210,9 @@ public final class DigestCalculator {
             this.root = root;
         }
 
-        private static Catalog load(Path path, PrintStream err) throws Exception {
+        private static Catalog load(Path path) throws Exception {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            factory.setFeature(
-                    "http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-            factory.setXIncludeAware(false);
-            factory.setExpandEntityReferences(false);
-
             DocumentBuilder builder = factory.newDocumentBuilder();
-            builder.setErrorHandler(new DefaultHandler());
             byte[] content = Files.readAllBytes(path);
             Document document;
             if (isBlank(content)) {
@@ -255,8 +228,9 @@ public final class DigestCalculator {
 
             Catalog catalog = new Catalog(document, root);
             for (Element fileNode : children(root, "FILE_ENTRY")) {
-                String name = one(fileNode, "FILE_NAME").getTextContent().trim();
-                if (name.length() == 0 || name.indexOf('/') >= 0 || name.indexOf('\\') >= 0) {
+                String name = one(fileNode, "FILE_NAME").getTextContent();
+                if (name.length() == 0 || name.indexOf('/') >= 0
+                        || name.indexOf(File.separatorChar) >= 0) {
                     throw new IllegalArgumentException("FILE_NAME invalido: " + name);
                 }
 
@@ -265,30 +239,15 @@ public final class DigestCalculator {
                     throw new IllegalArgumentException("FILE_ENTRY sem DIGEST_ENTRY: " + name);
                 }
 
-                Entry entry = catalog.entries.get(name);
-                if (entry == null) {
-                    entry = new Entry(fileNode);
-                    catalog.entries.put(name, entry);
-                }
+                Entry entry = new Entry(fileNode);
+                catalog.entries.put(name, entry);
                 for (Element digestNode : digestNodes) {
-                    String typeName = one(digestNode, "DIGEST_TYPE").getTextContent().trim();
+                    String typeName = one(digestNode, "DIGEST_TYPE").getTextContent();
                     String value = one(digestNode, "DIGEST_HEX")
                             .getTextContent().trim().toLowerCase(Locale.ROOT);
-                    DigestType type;
-                    try {
-                        type = DigestType.parse(typeName);
-                    } catch (IllegalArgumentException e) {
-                        err.println("Aviso: DIGEST_TYPE invalido ignorado para " + name
-                                + ": " + typeName);
-                        continue;
-                    }
-                    if (entry.digests.containsKey(type)) {
-                        err.println("Aviso: " + type.externalName + " repetido para " + name
-                                + "; somente o primeiro e considerado");
-                        continue;
-                    }
+                    DigestType type = DigestType.parse(typeName);
                     if (value.length() != type.hexLength || !value.matches("[0-9a-f]+")) {
-                        err.println("Aviso: DIGEST_HEX invalido para " + name + " ("
+                        System.err.println("Aviso: DIGEST_HEX invalido para " + name + " ("
                                 + type.externalName + ")");
                     }
                     entry.digests.put(type, value);
@@ -336,18 +295,11 @@ public final class DigestCalculator {
         }
 
         private void save(Path path) throws Exception {
-            removeBlankText(root);
             TransformerFactory factory = TransformerFactory.newInstance();
-            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
             Transformer transformer = factory.newTransformer();
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-            transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
-            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             try (OutputStream output = Files.newOutputStream(path)) {
-                String declaration = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-                        + System.lineSeparator();
-                output.write(declaration.getBytes(StandardCharsets.UTF_8));
                 transformer.transform(new DOMSource(document), new StreamResult(output));
             }
         }
@@ -372,20 +324,6 @@ public final class DigestCalculator {
                 }
             }
             return result;
-        }
-
-        private static void removeBlankText(Node parent) {
-            Node child = parent.getFirstChild();
-            while (child != null) {
-                Node next = child.getNextSibling();
-                if (child.getNodeType() == Node.TEXT_NODE
-                        && child.getNodeValue().trim().isEmpty()) {
-                    parent.removeChild(child);
-                } else if (child.getNodeType() == Node.ELEMENT_NODE) {
-                    removeBlankText(child);
-                }
-                child = next;
-            }
         }
 
         private static boolean isBlank(byte[] content) {
